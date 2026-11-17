@@ -124,6 +124,13 @@ tbody tr[data-selected="true"] { background: var(--accent-soft); }
   .spot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field input { min-width: 0; width: 100%; }
 }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--step-5); align-items: start; }
+.duo .panel { margin: 0; }
+.duo .panel h2 { font-size: var(--step-3); margin: 0 0 var(--step-2); padding: var(--step-4) var(--step-4) 0; }
+.duo .panel:nth-child(3) { grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .duo { grid-template-columns: 1fr; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; }
 }

@@ -122,7 +122,7 @@
     return [
       { text: "Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline. Check the protocol's own site first and never connect from a link in a message.", cost: 'under $3 of gas for the first transaction', time: '5 minutes' },
       { text: actionFor(p, capital, chain), cost: '$' + capital + ' of capital and about $' + gas + ' of gas', time: '15 minutes to set up' },
-      { text: weeklyActionFor(p) + ' One qualifying action a week keeps the wallet in the protocol\u2019s activity records.', cost: 'about $' + Math.max(2, Math.round(gas / 3)) + ' of gas a week', time: '10 minutes a week' },
+      { text: weeklyActionFor(p) + " One qualifying action a week keeps the wallet in the protocol's activity records.", cost: 'about $' + Math.max(2, Math.round(gas / 3)) + ' of gas a week', time: '10 minutes a week' },
       { text: 'Hold the position for at least ' + hold + ' days so the activity is counted in more than one snapshot, and do not withdraw and re-deposit to game it.', cost: 'the $' + capital + ' stays in the position', time: hold + ' days' },
       { text: "Before you withdraw, open the protocol's own points or rewards page and check what counts, then claim only from the link it publishes.", cost: 'no fee to check, and never pay to claim', time: '10 minutes' },
       { text: 'Write the wallet, the dates and every transaction in a farm log, and plan the exit in tranches so one withdrawal does not eat the position in gas.', cost: 'nothing but the log', time: '5 minutes' }
@@ -254,8 +254,8 @@
       el('div', { class: 'field' }, el('label', { for: 'category', text: 'Category' }), select),
       el('div', { class: 'field' }, el('label', { for: 'chain', text: 'Chain' }), chainSelect),
       watch,
-      el('div', { class: 'field' }, el('span', { class: 'sub', text: 'View' }), el('div', { class: 'tabs' }, tabBtn('pre-token', 'Pre-token'), tabBtn('live', 'Live token'), tabBtn('comps', 'Comps'))),
-      el('span', { class: 'count', text: state.tab === 'pre-token' ? rows().length + ' rows shown' : state.tab === 'live' ? DATA.live.length + ' live-token protocols' : (DATA.comps || []).length + ' calibrated categories' })
+      el('div', { class: 'field' }, el('span', { class: 'sub', text: 'View' }), el('div', { class: 'tabs' }, tabBtn('pre-token', 'Pre-token'), tabBtn('live', 'Live token'), tabBtn('comps', 'Comps'), tabBtn('movers', 'Movers'))),
+      el('span', { class: 'count', text: state.tab === 'pre-token' ? rows().length + ' rows shown' : state.tab === 'live' ? DATA.live.length + ' live-token protocols' : state.tab === 'movers' ? 'biggest 7-day TVL moves, pre-token only' : (DATA.comps || []).length + ' calibrated categories' })
     );
   }
   function sortHeader(key, label) {
@@ -365,6 +365,97 @@
       )
     );
   }
+  // Movers: the fastest TVL changes in the snapshot, not a second ranking.
+  // A protocol that grows 40% in a week from a small base is a different
+  // story from one that grows 5% on billions of TVL, so the tables show the
+  // TVL and the implied value beside the move, and the newest listings get
+  // their own list: age is part of the model, and a protocol listed a month
+  // ago with no token yet is worth watching even at a modest TVL.
+  function moverPanel(title, caption, list) {
+    var tbody = el('tbody');
+    list.forEach(function (r) {
+      var growthClass = r.change_7d === null ? '' : r.change_7d >= 0 ? 'pos' : 'neg';
+      tbody.appendChild(el('tr', {
+        tabindex: '0',
+        onclick: function () { openDetail(r.slug); },
+        onkeydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(r.slug); } }
+      },
+        el('td', { class: 'num', text: String(r.rank) }),
+        el('td', null, el('div', { class: 'name' },
+          el('b', { text: r.name }),
+          el('span', { class: 'sub', text: (r.category || 'Other') + ' on ' + (r.chains && r.chains.length ? r.chains.slice(0, 2).join(', ') : 'an unnamed chain') + (isWatchlist(r.slug) ? ' · watchlist' : '') })
+        )),
+        el('td', { class: 'num', text: fmtUsd(r.tvl_usd) }),
+        el('td', { class: 'num ' + growthClass, text: fmtPct(r.change_7d) }),
+        el('td', { class: 'num', text: fmtAge(r.age_days) }),
+        el('td', { class: 'num', text: fmtUsd(r.implied_value_usd) })
+      ));
+    });
+    return el('div', { class: 'panel' },
+      el('h2', { text: title }),
+      el('div', { class: 'table-wrap' },
+        el('table', null,
+          el('caption', { class: 'sub', text: caption }),
+          el('thead', null, el('tr', null, el('th', { scope: 'col', text: 'Rank' }), el('th', { scope: 'col', text: 'Protocol' }), el('th', { scope: 'col', text: 'TVL' }), el('th', { scope: 'col', text: '7d' }), el('th', { scope: 'col', text: 'Age' }), el('th', { scope: 'col', text: 'Implied value' }))),
+          tbody
+        )
+      )
+    );
+  }
+  function moversTable() {
+    var withGrowth = DATA.rows.filter(function (r) { return r.change_7d !== null && r.change_7d !== undefined; });
+    var gainers = withGrowth.slice().sort(function (a, b) { return b.change_7d - a.change_7d; }).slice(0, 10);
+    var losers = withGrowth.slice().sort(function (a, b) { return a.change_7d - b.change_7d; }).slice(0, 10);
+    var withAge = DATA.rows.filter(function (r) { return r.age_days !== null && r.age_days !== undefined; });
+    var newest = withAge.slice().sort(function (a, b) { return a.age_days - b.age_days; }).slice(0, 10);
+    var shell = el('div', { class: 'duo' });
+    shell.appendChild(moverPanel('Fastest growers', 'Largest seven-day TVL gains among pre-token protocols. A gain from a small base is not the same as a gain on billions, so check the TVL beside the move.', gainers));
+    shell.appendChild(moverPanel('Fastest fallers', 'Largest seven-day TVL falls among pre-token protocols. A falling TVL lowers the implied value and raises a flag in the detail view, but a fall after a spike is not the same as a slow bleed.', losers));
+    shell.appendChild(moverPanel('Newest on the radar', 'Shortest time since listing, pre-token only. These are the protocols the maturity multiplier discounts hardest, because they have the least track record with no token.', newest));
+    return shell;
+  }
+  // Category summary: the board grouped by category, so a reader can see
+  // where the implied value concentrates instead of only which single
+  // protocol tops the list. Totals are sums over the board rows, the median
+  // comp is the median of the rows in the category, and the top protocol is
+  // the one with the highest implied value in it.
+  function categorySummary() {
+    var byCategory = {};
+    DATA.rows.forEach(function (r) {
+      var key = r.category || 'Other';
+      if (!byCategory[key]) byCategory[key] = { category: key, count: 0, tvl: 0, implied: 0, comps: [], top: null };
+      var group = byCategory[key];
+      group.count += 1;
+      group.tvl += r.tvl_usd;
+      group.implied += r.implied_value_usd;
+      group.comps.push(r.comp_multiple);
+      if (!group.top || r.implied_value_usd > group.top.implied_value_usd) group.top = r;
+    });
+    var groups = Object.keys(byCategory).map(function (k) { return byCategory[k]; });
+    groups.sort(function (a, b) { return b.implied - a.implied; });
+    var tbody = el('tbody');
+    groups.forEach(function (g) {
+      var sortedComps = g.comps.slice().sort(function (a, b) { return a - b; });
+      var medianComp = sortedComps[Math.floor(sortedComps.length / 2)];
+      tbody.appendChild(el('tr', null,
+        el('td', null, el('b', { text: g.category })),
+        el('td', { class: 'num', text: String(g.count) }),
+        el('td', { class: 'num', text: fmtUsd(g.tvl) }),
+        el('td', { class: 'num', text: fmtUsd(g.implied) }),
+        el('td', null, el('div', { class: 'name' }, el('b', { text: g.top.name }), el('span', { class: 'sub', text: 'rank ' + g.top.rank + ' · ' + fmtUsd(g.top.implied_value_usd) }))),
+        el('td', { class: 'num', text: medianComp.toFixed(2) + 'x' })
+      ));
+    });
+    return el('div', { class: 'panel' },
+      el('div', { class: 'table-wrap' },
+        el('table', null,
+          el('caption', { class: 'sub', text: 'Where the implied value sits: each category on the board, its row count, its TVL and implied value summed, its top protocol, and the median comp of its rows.' }),
+          el('thead', null, el('tr', null, el('th', { scope: 'col', text: 'Category' }), el('th', { scope: 'col', text: 'Rows' }), el('th', { scope: 'col', text: 'Total TVL' }), el('th', { scope: 'col', text: 'Total implied' }), el('th', { scope: 'col', text: 'Top protocol' }), el('th', { scope: 'col', text: 'Median comp' }))),
+          tbody
+        )
+      )
+    );
+  }
   function modelPanel() {
     var m = DATA.model;
     var gw = el('input', { type: 'range', min: '0', max: '1', step: '0.05', value: String(growthWeight()), 'aria-label': 'Growth weight' });
@@ -447,7 +538,8 @@
     shell.appendChild(lede());
     shell.appendChild(spotlight());
     shell.appendChild(controls());
-    shell.appendChild(state.tab === 'pre-token' ? boardTable() : state.tab === 'live' ? liveTable() : compsTable());
+    shell.appendChild(state.tab === 'pre-token' ? boardTable() : state.tab === 'live' ? liveTable() : state.tab === 'movers' ? moversTable() : compsTable());
+    if (state.tab === 'comps') shell.appendChild(categorySummary());
     if (state.tab === 'pre-token') shell.appendChild(modelPanel());
     app.appendChild(shell);
     app.setAttribute('aria-busy', 'false');
